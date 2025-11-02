@@ -1,0 +1,58 @@
+{
+  "name": "recommence",
+  "version": "0.0.1",
+  "description": "long running workflows without magic",
+  "keywords": [
+    "workflow",
+    "durable execution"
+  ],
+  "homepage": "https://github.com/loreanvictor/recommence#readme",
+  "bugs": {
+    "url": "https://github.com/loreanvictor/recommence/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/loreanvictor/recommence.git"
+  },
+  "license": "MIT",
+  "author": "Eugene Ghanizadeh Khoub",
+  "main": "dist/commonjs/index.js",
+  "module": "dist/es/index.js",
+  "types": "dist/es/index.d.ts",
+  "files": [
+    "dist/es",
+    "dist/commonjs"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "sample": "vite sample",
+    "test": "jest",
+    "lint": "eslint .",
+    "typecheck": "tsc -p conf/typescript/es.json --noEmit",
+    "coverage": "jest --coverage",
+    "build-commonjs": "tsc -p conf/typescript/commonjs.json",
+    "build-es": "tsc -p conf/typescript/es.json",
+    "build": "npm run build-commonjs && npm run build-es",
+    "prepack": "npm run build"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.5",
+    "@babel/preset-env": "^7.28.5",
+    "@sindresorhus/tsconfig": "^8.1.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.9.2",
+    "@typescript-eslint/eslint-plugin": "^8.46.2",
+    "@typescript-eslint/parser": "^8.46.2",
+    "babel-jest": "^30.2.0",
+    "eslint": "^9.39.0",
+    "jest": "^30.2.0",
+    "ts-inference-check": "^0.3.0",
+    "ts-jest": "^29.4.5",
+    "ts-node": "^10.9.2",
+    "tslib": "^2.8.1",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "sleep-promise": "^9.1.0"
+  }
+}

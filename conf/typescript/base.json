@@ -1,0 +1,13 @@
+{
+  "extends": "@sindresorhus/tsconfig",
+  "compilerOptions": {
+		"moduleResolution": "nodenext",
+    "isolatedModules": true,
+		"module": "nodenext",
+    "jsx": "react",
+		"esModuleInterop": true,
+		"noImplicitAny": false
+  },
+  "include": ["../../src"],
+	"exclude": ["../../**/test/**/*"]
+}
