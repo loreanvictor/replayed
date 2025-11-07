@@ -1,62 +1,86 @@
 import sleep from 'sleep-promise'
 
-import { getRunContext, getWorkflowContext, execInStepContext } from './context'
-
-
-export class StepPendingError extends Error {
-  workflow: string
-  run: string
-  step: number
-
-  constructor(workflow: string, run: string, step: number) {
-    super(`Step ${step} of workflow ${workflow} (${run}) is still pending.`)
-    this.name = 'StepPendingError'
-    this.workflow = workflow
-    this.run = run
-    this.step = step
-  }
-}
+import { getRunContext, getReplayContextUnsafe, execInStepContext } from './context'
+import { FatalError, Retry, StepPendingError } from './errors'
 
 
 export const step = <T, Fn extends ((...args: any[]) => Promise<T>)>(fn: Fn): Fn => {
   return (async (...args: Parameters<Fn>): Promise<T> => {
-    const { events } = getWorkflowContext()
-    const context = getRunContext()
-    context.step = context.step + 1
+    const replay = getReplayContextUnsafe()
 
-    const state = await events.getStepState(context.run, context.step)
+    if (!replay) {
+      return fn(...args)
+    }
 
-    if (!state || state.status === 'error') {
-      events.log({
-        type: state ? 'step:retried' : 'step:started',
-        run: context.run,
-        step: context.step,
+    const run = getRunContext()
+    run.stepCounter += 1
+
+    const state = await replay.events.getStepState(run.runId, run.stepCounter)
+
+    if (!state || state.status === 'error' || state.status === 'interrupted') {
+      replay.events.log({
+        type: !state ? 'step:started' : state.status === 'interrupted' ? 'step:recovered' : 'step:started',
+        runId: run.runId,
+        step: run.stepCounter,
         timestamp: new Date()
       })
 
       await sleep(0)
       setImmediate(() => {
-        execInStepContext(context.step, (state?.attempts.length ?? 0) + 1, () => {
+        execInStepContext(run.stepCounter, (state?.attempts.length ?? 0) + 1, () => {
           fn(...args)
             .then(result => {
-              events.log({
+              replay.events.log({
                 type: 'step:completed',
-                run: context.run,
-                step: context.step,
+                runId: run.runId,
+                step: run.stepCounter,
                 timestamp: new Date(),
                 result
               })
-              // TODO: also resume run
+
+              run.resume({ type: 'step:completed', step: run.stepCounter, result })
             })
             .catch(error => {
-              // TODO: handle errors, and retry accordingly
+              if (error instanceof FatalError) {
+                replay.events.log({
+                  type: 'step:failed',
+                  runId: run.runId,
+                  step: run.stepCounter,
+                  timestamp: new Date(),
+                  error
+                })
+
+                run.resume()
+              } else {
+                replay.events.log({
+                  type: 'step:error',
+                  runId: run.runId,
+                  step: run.stepCounter,
+                  timestamp: new Date(),
+                  error
+                })
+
+                // TODO: check if max attempts have reached,
+                //       and fail the step if so with proper error.
+
+                if (error instanceof Retry) {
+                  // TODO: schedule retry
+                } else {
+                  // TODO: retry immediately, for this, this piece of code
+                  //       needs to be extracted into a function recursively
+                  //       calling itself and re-attempting the step. Note that
+                  //       we could also just simply resume the run here and it
+                  //       would automatically yield the same result, but a bit slower
+                  //       as all prior steps would need to be replayed.
+                }
+              }
             })
         })
       })
-      throw new StepPendingError(context.workflow, context.run, context.step)
-    } else if (state.status === 'started' || state.status === 'retried') {
+      throw new StepPendingError(run.replayableId, run.runId, run.stepCounter)
+    } else if (state.status === 'running') {
       await sleep(0)
-      throw new StepPendingError(context.workflow, context.run, context.step)
+      throw new StepPendingError(run.replayableId, run.runId, run.stepCounter)
     } else if (state.status === 'failed') {
       throw state.error
     } else {

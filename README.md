@@ -5,19 +5,38 @@
 
 <br/>
 
-long running workflows without magic:
+long running workflows that can be resumed:
 
 ```ts
-import { workflow, step, sleep, hook } from 'replayed'
+import { replayable, step, sleep, hook } from 'replayed'
 
-const fetchUserData = step(async userid => ...)
-const sendVerificationEmail = step(async (email, name, token) => ...)
-const markEmailVerified = step(async (userid, email) => ...)
 
-const verifyEmail = workflow('verify-email', async (userid, email) => {
+//
+// the workflow itself is a registered replayable,
+// which will be replayed upon pauses, after interrupts, etc.
+//
+const verifyEmail = replayable('verify-email', async (userid, email) => {
+  //
+  // the data here is fetched once and cached,
+  // and the cached value is used in replays instead
+  // of fetching again.
+  //
   const { name } = await fetchUserData(userid)
-  const confirm = hook()
 
+  //
+  // a hook is a point where we wait for
+  // an external event, which can also take
+  // a long time to occur, like the user confirming
+  // their email address.
+  //
+  const confirm = hook()
+  await sendVerificationEmail(email, name, confirm.token)
+
+  //
+  // we wait one day for the user to confirm
+  // the email address, after that the hook
+  // won't work anymore.
+  //
   const approved = await Promise.race([
     sleep('1 day'),
     confirm.once(),
@@ -25,7 +44,11 @@ const verifyEmail = workflow('verify-email', async (userid, email) => {
 
   if (approved) {
     await markEmailVerified(userid, email)
+    await ('30 days')
+    await sendFollowUpEmail(email)
+  } else {
+    await sleep('2 days')
+    await sendReminderEmail(email)
   }
 })
-
 ```

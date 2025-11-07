@@ -2,7 +2,9 @@
 	"extends": "./conf/typescript/base.json",
 	"ts-node": {
 		"compilerOptions": {
-			"module": "nodenext"
+			"module": "nodenext",
+			"noUnusedLocals": false,
+			"noUnusedParameters": false
 		}
 	}
 }

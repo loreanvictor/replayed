@@ -27,7 +27,7 @@
   ],
   "sideEffects": false,
   "scripts": {
-    "sample": "vite sample",
+    "sample": "ts-node sample/index.ts",
     "test": "jest",
     "lint": "eslint .",
     "typecheck": "tsc -p conf/typescript/es.json --noEmit",

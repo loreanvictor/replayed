@@ -1,17 +1,20 @@
 import { AsyncLocalStorage } from 'node:async_hooks'
 
-import { EventLog } from './log'
+import { EventLog, ResumptionSource } from './log'
+import { Notifier } from './notifier'
 
 
-export interface WorkflowContext {
+export interface ReplayContext {
   events: EventLog
+  notifier: Notifier
 }
 
 export interface RunContext {
-  run: string
-  workflow: string
-  step: number
-  hook: number
+  runId: string
+  replayableId: string
+  stepCounter: number
+  hookCounter: number
+  resume: (source?: ResumptionSource) => void
 }
 
 export interface StepContext {
@@ -19,15 +22,24 @@ export interface StepContext {
   attempt: number
 }
 
-export const workflowCtx = new AsyncLocalStorage<WorkflowContext>()
+const replayCtx = new AsyncLocalStorage<ReplayContext>()
 const runCtx = new AsyncLocalStorage<RunContext>()
 const stepCtx = new AsyncLocalStorage<StepContext>()
 
-export const execInWorkflowContext = (events: EventLog, fn: () => void) =>
-  workflowCtx.run({ events }, fn)
+export const execInReplayContext = (
+  events: EventLog,
+  notifier: Notifier,
+  fn: () => void
+) =>
+  replayCtx.run({ events, notifier }, fn)
 
-export const execInRunContext = (run: string, workflow: string, fn: () => void) =>
-  runCtx.run({ run, workflow, step: 0, hook: 0 }, fn)
+export const execInRunContext = (
+  runId: string,
+  replayableId: string,
+  resume: () => void,
+  fn: () => void
+) =>
+  runCtx.run({ runId, replayableId, resume, stepCounter: 0, hookCounter: 0 }, fn)
 
 export const execInStepContext = (step: number, attempt: number, fn: () => void) =>
   stepCtx.run({ step, attempt }, fn)
@@ -49,6 +61,16 @@ const getContextSafe = <T>(ctx: AsyncLocalStorage<T>, message: string) => {
   return store
 }
 
-export const getWorkflowContext = () => getContextSafe(workflowCtx, 'must start workflows in a workflow context.')
+export const getReplayContext = () => getContextSafe(replayCtx, 'must start replayables in a replay context.')
+export const getReplayContextUnsafe = () => replayCtx.getStore()
 export const getRunContext = () => getContextSafe(runCtx, 'run context not found.')
-export const getStepContext = () => getContextSafe(stepCtx, 'must run step functions in a workflow function, that is also execution in a workflow context.')
+export const getStepContext = () => stepCtx.getStore()
+
+
+export const using = (context: ReplayContext, fn: () => void | Promise<void>) => {
+  return execInReplayContext(context.events, context.notifier, fn)
+}
+
+export const use = (context: ReplayContext) => {
+  replayCtx.enterWith(context)
+}
